@@ -16,4 +16,9 @@
       <Filter>_rtaudio</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\mp3_decoder.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
