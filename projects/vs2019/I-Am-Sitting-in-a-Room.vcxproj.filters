@@ -4,10 +4,16 @@
     <Filter Include="src">
       <UniqueIdentifier>{db4ee33e-037a-4374-b273-b115c400a871}</UniqueIdentifier>
     </Filter>
+    <Filter Include="_rtaudio">
+      <UniqueIdentifier>{0f574bb3-f91e-4ee1-a391-23e38871cae8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\main.cpp">
       <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\externals\rtaudio\RtAudio.cpp">
+      <Filter>_rtaudio</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
