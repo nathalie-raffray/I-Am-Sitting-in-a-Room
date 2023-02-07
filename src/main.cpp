@@ -5,6 +5,8 @@
 
 #include "mp3_decoder.hpp"
 
+#define MAX_NUMBER_OF_LOOPS 50
+
 
 //--------------------------------------------------------------------------------------------------
 enum class device_type
@@ -161,6 +163,35 @@ int get_user_specified_device_id(RtAudio &dac, device_type deviceType)
 }
 
 //--------------------------------------------------------------------------------------------------
+bool valid_loop_number(int loops)
+{
+    return loops > 0 && loops < MAX_NUMBER_OF_LOOPS;
+}
+
+//--------------------------------------------------------------------------------------------------
+int get_user_specified_number_of_loops()
+{
+    std::cout << "How many loops of audio do you want?" << std::endl;
+
+    auto userInput = std::string("");
+    std::cin >> userInput;
+
+    while (!valid_loop_number(std::stoi(userInput)))
+    {
+        std::cout << "Invalid loop number. Please specify number of loops between 0 and " 
+            << MAX_NUMBER_OF_LOOPS << ". Try again." << std::endl;
+        std::cin >> userInput;
+    }
+
+    // clear cin
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    std::cout << std::endl;
+
+    return std::stoi(userInput);
+}
+
+//--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
     const auto filePath = "../../res/input/i_am_sitting_in_a_room.mp3";
@@ -193,6 +224,7 @@ int main(int argc, char *argv[])
 
     const auto chosenInputDeviceId  = get_user_specified_device_id(dac, device_type::input);
     const auto chosenOutputDeviceId = get_user_specified_device_id(dac, device_type::output);
+    const auto loopNumber           = get_user_specified_number_of_loops();
 
     if (!try_begin_playing_audio(dac, decoder))
     {
