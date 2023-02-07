@@ -1,0 +1,4 @@
+﻿bin
+temp
+projects/vs2019/.vs
+*.user
