@@ -1,3 +1,6 @@
 [submodule "externals/rtaudio"]
 	path = externals/rtaudio
 	url = https://github.com/thestk/rtaudio.git
+[submodule "externals/dr_libs"]
+	path = externals/dr_libs
+	url = https://github.com/mackron/dr_libs.git
