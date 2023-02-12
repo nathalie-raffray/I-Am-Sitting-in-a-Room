@@ -1,12 +1,20 @@
 #include <fstream>
 #include <filesystem>
+#include <mutex>
 
 #include "rtaudio/RtAudio.h"
 
+#include "audio_buffer.hpp"
 #include "mp3_decoder.hpp"
 
 #define MAX_NUMBER_OF_LOOPS 50
+#define SAMPLE_TYPE RTAUDIO_FLOAT32
+using sample_type = float;
 
+
+std::mutex m;
+std::condition_variable cv;
+bool ready;
 
 //--------------------------------------------------------------------------------------------------
 enum class device_type
@@ -32,36 +40,87 @@ std::vector<char> read_file(const std::string &filePath)
 }
 
 //--------------------------------------------------------------------------------------------------
-int sing_song(void *pOutputBuffer, void *pInputBuffer, unsigned int nBufferFrames,
+int play_and_record(void *pOutputBuffer, void *pInputBuffer, unsigned int nBufferFrames,
     double streamTime, RtAudioStreamStatus status, void *pUserData)
 {
     if (status)
     {
-        std::cout << "Stream underflow detected!" << std::endl;
+        if (status == RTAUDIO_INPUT_OVERFLOW)
+        {
+            std::cout << "Stream underflow detected: Input data was discarded because of an overflow "
+                "condition at the driver." << std::endl;
+        }
+        if (status == RTAUDIO_OUTPUT_UNDERFLOW)
+        {
+            std::cout << "Stream underflow detected: The output buffer ran low, likely causing a gap  "
+                "in the output sound." << std::endl;
+        }
     }
 
-    auto pOutputFloatBuffer = reinterpret_cast<float *>(pOutputBuffer);
-    auto pMp3Decoder        = reinterpret_cast<mp3_decoder *>(pUserData);
+    std::cout << "number buffer frames: " << nBufferFrames << std::endl;
 
-    pMp3Decoder->readPcmFrames(nBufferFrames, pOutputFloatBuffer);
+    auto pAudioBuffer = reinterpret_cast<audio_buffer<sample_type> *>(pUserData);
+    if (pAudioBuffer->reachedEndOfBuffer())
+    {
+        // Notify main thread we are done.
+        std::lock_guard lk(m);
+        ready = true;
+        cv.notify_one();
+
+        // To stop the stream and drain the output buffer (dac.stopStream()), return 1.
+        // Abort the stream immediately (dac.abortStream()), return 2.
+        // This callback function is only called between dac.openStream() and dac.stopStream()
+        // so after returning 1, it won't be called again.
+        return 1;
+    }
+
+    // Play audio.
+    pAudioBuffer->read(pOutputBuffer, nBufferFrames);
+
+    // Record audio.
+    static auto firstIteration = true;
+    if (firstIteration)
+    {
+        // First time are in play_and_record() nothing has played yet, so we wait for
+        // next iteration to record.
+        firstIteration = false;
+    }
+    else
+    {
+        // Recording...
+        pAudioBuffer->write(pInputBuffer, nBufferFrames);
+    }
 
     return 0;
 }
 
 //--------------------------------------------------------------------------------------------------
-bool try_begin_playing_audio(RtAudio &dac, mp3_decoder &decoder)
+bool try_begin_playing_and_recording_audio(RtAudio &dac, mp3_decoder &decoder, 
+    audio_buffer<sample_type> &audioBuffer, int32_t inputDeviceId, int32_t outputDeviceId)
 {
-    RtAudio::StreamParameters parameters;
-    parameters.deviceId     = dac.getDefaultOutputDevice();
-    parameters.nChannels    = decoder.getChannelCount();
-    parameters.firstChannel = 0;
-    const auto sampleRate   = decoder.getSampleFrequency();
-    auto bufferFrames       = 256u; // 256 sample frames
+    RtAudio::StreamParameters iParams, oParams;
+    oParams.deviceId            = outputDeviceId;
+    oParams.nChannels           = decoder.getChannelCount();
+    oParams.firstChannel        = 0;
+    iParams.deviceId            = inputDeviceId;
+    iParams.nChannels           = decoder.getChannelCount();
+    iParams.firstChannel        = 0;
+
+    const auto sampleRate       = decoder.getSampleFrequency();
+    constexpr auto latencyInS   = 40u;
+    auto desiredBufferFrames    = (uint32_t)std::min(
+        decoder.getSampleCount(), 
+        (uint64_t)(decoder.getSampleFrequency()) * latencyInS
+    );
+
+    RtAudio::StreamOptions streamOptions;
+    streamOptions.flags         = RTAUDIO_SCHEDULE_REALTIME;
+    streamOptions.priority      = std::numeric_limits<int>::max();
 
     try 
     {
-        dac.openStream(&parameters, NULL, RTAUDIO_FLOAT32,
-            sampleRate, &bufferFrames, &sing_song, (void *)&decoder);
+        dac.openStream(&oParams, &iParams, SAMPLE_TYPE, sampleRate, &desiredBufferFrames, 
+            &play_and_record, (void *)&audioBuffer/*, &streamOptions */ );
         dac.startStream();
     }
     catch (RtAudioError &e)
@@ -71,28 +130,6 @@ bool try_begin_playing_audio(RtAudio &dac, mp3_decoder &decoder)
     }
 
     return true;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool try_end_playing_audio(RtAudio &dac)
-{
-    auto success = true;
-    try
-    {
-        dac.stopStream();
-    }
-    catch (RtAudioError &e)
-    {
-        e.printMessage();
-        success = false;
-    }
-
-    if (dac.isStreamOpen())
-    {
-        dac.closeStream();
-    }
-
-    return success;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -226,21 +263,26 @@ int main(int argc, char *argv[])
     const auto chosenOutputDeviceId = get_user_specified_device_id(dac, device_type::output);
     const auto loopNumber           = get_user_specified_number_of_loops();
 
-    if (!try_begin_playing_audio(dac, decoder))
+    const auto totalNumberSamples   = decoder.getSampleCount() * loopNumber;
+    auto audioBuffer                = audio_buffer<sample_type>(totalNumberSamples, decoder.getChannelCount());
+
+    // init audio Buffer
+    auto song = std::vector<uint8_t>(decoder.getSampleCount() * decoder.getChannelCount() * sizeof(sample_type));
+    decoder.readPcmFrames(decoder.getSampleCount(), (float *)song.data());
+    audioBuffer.write(song.data(), decoder.getSampleCount());
+
+    if (!try_begin_playing_and_recording_audio(dac, decoder, audioBuffer, chosenInputDeviceId, chosenOutputDeviceId))
     {
         std::cout << "Error: Failed to play audio." << std::endl;
         return -1;
     }
-    
-    char input;
-    std::cout << "Playing ... press <enter> to quit." << std::endl;
-    std::cin.get(input);
 
-    if (!try_end_playing_audio(dac))
-    {
-        std::cout << "Error: Failed to stop stream." << std::endl;
-        return -1;
-    }
+    // Wait until play_and_record ends.
+    std::unique_lock lk(m);
+    cv.wait(lk, [] { return ready; });
+
+    std::cout << "Stream ended..." << std::endl;
+    // We can export our song.
 
     return 0;
 }
