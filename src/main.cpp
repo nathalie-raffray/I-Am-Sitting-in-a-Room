@@ -8,15 +8,20 @@
 #include "mp3_decoder.hpp"
 #include "wav_encoder.hpp"
 
+// Decide sample type.
+#define WAV_FORMAT DR_WAVE_FORMAT_PCM   // DR_WAVE_FORMAT_IEEE_FLOAT
+#define SAMPLE_TYPE RTAUDIO_SINT16      // RTAUDIO_FLOAT32
+using sample_type = int16_t;            // float
+
 #define MAX_NUMBER_OF_LOOPS 50
-#define SAMPLE_TYPE RTAUDIO_FLOAT32
-using sample_type   = float;
+
 using decoder       = mp3_decoder;
 using encoder       = wav_encoder;
 
 std::mutex m;
 std::condition_variable cv;
 bool ready;
+
 
 //--------------------------------------------------------------------------------------------------
 enum class device_type
@@ -242,7 +247,7 @@ void init_audio_buffer(audio_buffer<sample_type> &audioBuffer, decoder &decoder)
 bool export_song(const char *outputFilename, decoder &decoder, audio_buffer<sample_type> &audioBuffer, uint16_t loopNumber)
 {
     auto upEncoder = std::make_unique<encoder>(outputFilename, decoder.getChannelCount(),
-        decoder.getSampleFrequency(), static_cast<uint32_t>(sizeof(sample_type)));
+        decoder.getSampleFrequency(), WAV_FORMAT, static_cast<uint32_t>(sizeof(sample_type)));
 
     return upEncoder->isValid() && 
         upEncoder->writePcmFrames(decoder.getSampleCount() * loopNumber, audioBuffer.data());
