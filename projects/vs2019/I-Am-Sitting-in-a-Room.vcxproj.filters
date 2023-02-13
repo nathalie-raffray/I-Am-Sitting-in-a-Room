@@ -23,5 +23,8 @@
     <ClInclude Include="..\..\src\audio_buffer.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\wav_encoder.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

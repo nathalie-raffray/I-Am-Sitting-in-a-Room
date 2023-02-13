@@ -92,6 +92,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\src\audio_buffer.hpp" />
     <ClInclude Include="..\..\src\mp3_decoder.hpp" />
+    <ClInclude Include="..\..\src\wav_encoder.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

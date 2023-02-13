@@ -6,11 +6,13 @@
 
 #include "audio_buffer.hpp"
 #include "mp3_decoder.hpp"
+#include "wav_encoder.hpp"
 
 #define MAX_NUMBER_OF_LOOPS 50
 #define SAMPLE_TYPE RTAUDIO_FLOAT32
-using sample_type = float;
-
+using sample_type   = float;
+using decoder       = mp3_decoder;
+using encoder       = wav_encoder;
 
 std::mutex m;
 std::condition_variable cv;
@@ -95,7 +97,7 @@ int play_and_record(void *pOutputBuffer, void *pInputBuffer, unsigned int nBuffe
 }
 
 //--------------------------------------------------------------------------------------------------
-bool try_begin_playing_and_recording_audio(RtAudio &dac, mp3_decoder &decoder, 
+bool try_begin_playing_and_recording_audio(RtAudio &dac, decoder &decoder, 
     audio_buffer<sample_type> &audioBuffer, int32_t inputDeviceId, int32_t outputDeviceId)
 {
     RtAudio::StreamParameters iParams, oParams;
@@ -229,6 +231,24 @@ int get_user_specified_number_of_loops()
 }
 
 //--------------------------------------------------------------------------------------------------
+void init_audio_buffer(audio_buffer<sample_type> &audioBuffer, decoder &decoder)
+{
+    auto song = std::vector<uint8_t>(decoder.getSampleCount() * decoder.getChannelCount() * sizeof(sample_type));
+    decoder.readPcmFrames(decoder.getSampleCount(), (float *)song.data());
+    audioBuffer.write(song.data(), static_cast<uint32_t>(decoder.getSampleCount()));
+}
+
+//--------------------------------------------------------------------------------------------------
+bool export_song(const char *outputFilename, decoder &decoder, audio_buffer<sample_type> &audioBuffer, uint16_t loopNumber)
+{
+    auto upEncoder = std::make_unique<encoder>(outputFilename, decoder.getChannelCount(),
+        decoder.getSampleFrequency(), static_cast<uint32_t>(sizeof(sample_type)));
+
+    return upEncoder->isValid() && 
+        upEncoder->writePcmFrames(decoder.getSampleCount() * loopNumber, audioBuffer.data());
+}
+
+//--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
     const auto filePath = "../../res/input/i_am_sitting_in_a_room.mp3";
@@ -245,8 +265,8 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    mp3_decoder decoder(mp3Bytes.data(), mp3Bytes.size());
-    if (!decoder.isValid())
+    auto upDecoder = std::make_unique<decoder>(mp3Bytes.data(), mp3Bytes.size());
+    if (!upDecoder || !upDecoder->isValid())
     {
         std::cout << "Error: Failed to decode mp3 file " << filePath << "." << std::endl;
         return -1;
@@ -263,15 +283,12 @@ int main(int argc, char *argv[])
     const auto chosenOutputDeviceId = get_user_specified_device_id(dac, device_type::output);
     const auto loopNumber           = get_user_specified_number_of_loops();
 
-    const auto totalNumberSamples   = decoder.getSampleCount() * loopNumber;
-    auto audioBuffer                = audio_buffer<sample_type>(totalNumberSamples, decoder.getChannelCount());
+    const auto totalNumberSamples   = upDecoder->getSampleCount() * loopNumber;
+    auto audioBuffer                = audio_buffer<sample_type>(totalNumberSamples, upDecoder->getChannelCount());
 
-    // init audio Buffer
-    auto song = std::vector<uint8_t>(decoder.getSampleCount() * decoder.getChannelCount() * sizeof(sample_type));
-    decoder.readPcmFrames(decoder.getSampleCount(), (float *)song.data());
-    audioBuffer.write(song.data(), decoder.getSampleCount());
+    init_audio_buffer(audioBuffer, *upDecoder);
 
-    if (!try_begin_playing_and_recording_audio(dac, decoder, audioBuffer, chosenInputDeviceId, chosenOutputDeviceId))
+    if (!try_begin_playing_and_recording_audio(dac, *upDecoder, audioBuffer, chosenInputDeviceId, chosenOutputDeviceId))
     {
         std::cout << "Error: Failed to play audio." << std::endl;
         return -1;
@@ -282,7 +299,23 @@ int main(int argc, char *argv[])
     cv.wait(lk, [] { return ready; });
 
     std::cout << "Stream ended..." << std::endl;
-    // We can export our song.
 
+    // Export song.
+    const auto outputFilename = "../../res/output/i_am_sitting_in_a_room.wav";
+    const auto outputFilepath = std::filesystem::path(outputFilename);
+    std::filesystem::create_directory(outputFilepath.parent_path());
+
+    if (std::filesystem::exists(outputFilepath))
+    {
+        std::filesystem::remove(outputFilepath);
+    }
+
+    if (!export_song(outputFilename, *upDecoder, audioBuffer, loopNumber))
+    {
+        std::cout << "Error : failed to write out all the audio samples into the exported "
+            "wav file." << std::endl;
+        return -1;
+    }
+    
     return 0;
 }
