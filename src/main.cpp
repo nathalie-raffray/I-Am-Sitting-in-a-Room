@@ -4,6 +4,7 @@
 
 #include "rtaudio/RtAudio.h"
 
+#include "program_options.hpp"
 #include "audio_buffer.hpp"
 #include "mp3_decoder.hpp"
 #include "wav_encoder.hpp"
@@ -256,24 +257,30 @@ bool export_song(const char *outputFilename, decoder &decoder, audio_buffer<samp
 //--------------------------------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    const auto filePath = "../../res/input/i_am_sitting_in_a_room.mp3";
-    if (!std::filesystem::exists(filePath))
+    const auto &options = program_options(argc, argv);
+    if (!options.areValid)
     {
-        std::cout << "Error: The file path provided (" << filePath << ") doesn't exist." << std::endl;
+        program_options::print_usage();
         return -1;
     }
 
-    auto mp3Bytes = read_file(filePath);
+    if (!std::filesystem::exists(options.inputFile))
+    {
+        std::cout << "Error: The file path provided (" << options.inputFile << ") doesn't exist." << std::endl;
+        return -1;
+    }
+
+    auto mp3Bytes = read_file(options.inputFile);
     if (mp3Bytes.empty())
     {
-        std::cout << "Error: Failed to read the contents of file at " << filePath << "." << std::endl;
+        std::cout << "Error: Failed to read the contents of file at " << options.inputFile << "." << std::endl;
         return -1;
     }
 
     auto upDecoder = std::make_unique<decoder>(mp3Bytes.data(), mp3Bytes.size());
     if (!upDecoder || !upDecoder->isValid())
     {
-        std::cout << "Error: Failed to decode mp3 file " << filePath << "." << std::endl;
+        std::cout << "Error: Failed to decode mp3 file " << options.inputFile << "." << std::endl;
         return -1;
     }
 
@@ -306,16 +313,20 @@ int main(int argc, char *argv[])
     std::cout << "Stream ended..." << std::endl;
 
     // Export song.
-    const auto outputFilename = "../../res/output/i_am_sitting_in_a_room.wav";
-    const auto outputFilepath = std::filesystem::path(outputFilename);
-    std::filesystem::create_directory(outputFilepath.parent_path());
+    const auto outputFilepath 
+        = std::filesystem::path(options.outputFolder) / 
+        (std::filesystem::path(options.inputFile).stem().string() + ".wav");
 
     if (std::filesystem::exists(outputFilepath))
     {
         std::filesystem::remove(outputFilepath);
     }
-
-    if (!export_song(outputFilename, *upDecoder, audioBuffer, loopNumber))
+    else
+    {
+        std::filesystem::create_directory(outputFilepath.parent_path());
+    }
+    
+    if (!export_song(outputFilepath.string().c_str(), *upDecoder, audioBuffer, loopNumber))
     {
         std::cout << "Error : failed to write out all the audio samples into the exported "
             "wav file." << std::endl;

@@ -2,3 +2,4 @@
 temp
 projects/vs2019/.vs
 *.user
+*.args.json

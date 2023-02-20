@@ -26,5 +26,6 @@
     <ClInclude Include="..\..\src\wav_encoder.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\program_options.hpp" />
   </ItemGroup>
 </Project>
