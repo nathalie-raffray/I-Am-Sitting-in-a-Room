@@ -256,7 +256,7 @@ void please_wait()
 {
     std::wcout << "Please wait a few moments we'll be right with you...." << std::endl << std::endl;
     std::wcout << give_art3() << std::endl << std::endl;
-    std::wcout << "Veuillez patienter s'il vous plaît...." << std::endl << std::endl;
+    std::wcout << L"Veuillez patienter s'il vous pla\u00eet...." << std::endl << std::endl;
     std::wcout << "Go get a coffee...." << std::endl << std::endl;
 }
 
