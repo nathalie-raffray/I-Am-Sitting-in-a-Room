@@ -246,9 +246,11 @@ int get_user_specified_number_of_loops()
 //--------------------------------------------------------------------------------------------------
 void init_audio_buffer(audio_buffer<sample_type> &audioBuffer, decoder &decoder)
 {
-    auto song = std::vector<uint8_t>(decoder.getSampleCount() * decoder.getChannelCount() * sizeof(sample_type));
-    decoder.readPcmFrames(decoder.getSampleCount(), (sample_type *)song.data());
-    audioBuffer.write(song.data(), static_cast<uint32_t>(decoder.getSampleCount()));
+    decoder.readPcmFrames(decoder.getSampleCount(), (sample_type *)audioBuffer.data());
+
+    const auto writeTell    = decoder.getSampleCount() * decoder.getChannelCount() * sizeof(sample_type);
+    constexpr auto readTell = 0u;
+    audioBuffer.seek(writeTell, readTell);
 }
 
 //--------------------------------------------------------------------------------------------------
