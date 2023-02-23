@@ -54,6 +54,121 @@ std::vector<char> read_file(const std::wstring &filePath)
 }
 
 //--------------------------------------------------------------------------------------------------
+bool is_correct_device_type(const RtAudio::DeviceInfo &info, device_type deviceType)
+{
+    return deviceType == device_type::input ? info.inputChannels > 0 : info.outputChannels > 0;
+}
+
+//--------------------------------------------------------------------------------------------------
+void list_devices_of_type(device_type deviceType, RtAudio &dac)
+{
+    RtAudio::DeviceInfo info;
+    for (auto i = 0u; i < dac.getDeviceCount(); i++)
+    {
+        info = dac.getDeviceInfo(i);
+        if (info.probed == true && is_correct_device_type(info, deviceType))
+        {
+            std::wcout << "     " << i << ": " << string_to_wstring(info.name) << std::endl;
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+bool is_valid_device_id(int id, device_type deviceType, RtAudio &dac)
+{
+    const auto deviceCount = static_cast<int32_t>(dac.getDeviceCount());
+    if (id < 0 || id >= deviceCount)
+    {
+        return false;
+    }
+
+    return is_correct_device_type(dac.getDeviceInfo(id), deviceType);
+}
+
+//--------------------------------------------------------------------------------------------------
+int get_valid_device_id_from_user(device_type deviceType, RtAudio &dac)
+{
+    auto userInput = std::string("");
+    std::cin >> userInput;
+
+    while (!is_valid_device_id(std::stoi(userInput), deviceType, dac))
+    {
+        std::wcout << "Invalid input. Try again." << std::endl;
+        std::cin >> userInput;
+    }
+
+    // clear cin
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    return std::stoi(userInput);
+}
+
+//--------------------------------------------------------------------------------------------------
+int get_user_specified_device_id(RtAudio &dac, device_type deviceType)
+{
+    const auto deviceTypeStr = deviceType == device_type::input ? "input" : "output";
+    std::wcout << "> Please specify from the list below your chosen " << deviceTypeStr << " device. "
+        "Enter the number preceding it to choose it." << std::endl;
+
+    list_devices_of_type(deviceType, dac);
+
+    const auto deviceId = get_valid_device_id_from_user(deviceType, dac);
+
+    std::wcout << std::endl << "Your chosen " << deviceTypeStr << " device is "
+        << string_to_wstring(dac.getDeviceInfo(deviceId).name) << "." << std::endl << std::endl;
+
+    return deviceId;
+}
+
+//--------------------------------------------------------------------------------------------------
+bool valid_loop_number(int loops)
+{
+    return loops > 0 && loops < MAX_NUMBER_OF_LOOPS;
+}
+
+//--------------------------------------------------------------------------------------------------
+int get_user_specified_number_of_loops()
+{
+    std::wcout << "> How many loops of audio do you want?" << std::endl;
+
+    auto userInput = std::string("");
+    std::cin >> userInput;
+
+    while (!valid_loop_number(std::stoi(userInput)))
+    {
+        std::wcout << "Invalid loop number. Please specify number of loops between 0 and "
+            << MAX_NUMBER_OF_LOOPS << ". Try again." << std::endl;
+        std::cin >> userInput;
+    }
+
+    // clear cin
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    std::wcout << std::endl;
+
+    return std::stoi(userInput);
+}
+
+//--------------------------------------------------------------------------------------------------
+void init_audio_buffer(audio_buffer<sample_type> &audioBuffer, decoder &decoder)
+{
+    decoder.readPcmFrames(decoder.getSampleCount(), (sample_type *)audioBuffer.data());
+
+    const auto writeTell    = decoder.getSampleCount() * decoder.getChannelCount() * sizeof(sample_type);
+    constexpr auto readTell = 0u;
+    audioBuffer.seek(writeTell, readTell);
+}
+
+//--------------------------------------------------------------------------------------------------
+void please_wait()
+{
+    std::wcout << "Please wait a few moments we'll be right with you...." << std::endl << std::endl;
+    std::wcout << give_art3() << std::endl << std::endl;
+    std::wcout << L"Veuillez patienter s'il vous pla\u00eet...." << std::endl << std::endl;
+    std::wcout << "Go get a coffee...." << std::endl << std::endl;
+}
+
+//--------------------------------------------------------------------------------------------------
 int play_and_record(void *pOutputBuffer, void *pInputBuffer, unsigned int nBufferFrames,
     double streamTime, RtAudioStreamStatus status, void *pUserData)
 {
@@ -148,124 +263,26 @@ bool try_begin_playing_and_recording_audio(RtAudio &dac, decoder &decoder,
 }
 
 //--------------------------------------------------------------------------------------------------
-bool is_correct_device_type(const RtAudio::DeviceInfo &info, device_type deviceType)
+void wait_for_play_and_record_to_end()
 {
-    return deviceType == device_type::input ? info.inputChannels > 0 : info.outputChannels > 0;
+    std::unique_lock lk(m);
+    cv.wait(lk, [] { return ready; });
 }
 
 //--------------------------------------------------------------------------------------------------
-bool is_valid_device_id(int id, device_type deviceType, RtAudio &dac)
+bool export_song(const std::filesystem::path &outputFilepath, decoder &decoder, 
+    audio_buffer<sample_type> &audioBuffer, uint16_t loopNumber)
 {
-    const auto deviceCount = static_cast<int32_t>(dac.getDeviceCount());
-    if (id < 0 || id >= deviceCount)
+    if (std::filesystem::exists(outputFilepath))
     {
-        return false;
+        std::filesystem::remove(outputFilepath);
+    }
+    else
+    {
+        std::filesystem::create_directory(outputFilepath.parent_path());
     }
 
-    return is_correct_device_type(dac.getDeviceInfo(id), deviceType);
-}
-
-//--------------------------------------------------------------------------------------------------
-void list_devices_of_type(device_type deviceType, RtAudio &dac)
-{
-    RtAudio::DeviceInfo info;
-    for (auto i = 0u; i < dac.getDeviceCount(); i++)
-    {
-        info = dac.getDeviceInfo(i);
-        if (info.probed == true && is_correct_device_type(info, deviceType))
-        {
-            std::wcout << "     " << i << ": " << string_to_wstring(info.name) << std::endl;
-        }
-    }
-}
-
-//--------------------------------------------------------------------------------------------------
-int get_valid_device_id_from_user(device_type deviceType, RtAudio &dac)
-{
-    auto userInput = std::string("");
-    std::cin >> userInput;
-
-    while (!is_valid_device_id(std::stoi(userInput), deviceType, dac))
-    {
-        std::wcout << "Invalid input. Try again." << std::endl;
-        std::cin >> userInput;
-    }
-
-    // clear cin
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-    return std::stoi(userInput);
-}
-
-//--------------------------------------------------------------------------------------------------
-int get_user_specified_device_id(RtAudio &dac, device_type deviceType)
-{
-    const auto deviceTypeStr = deviceType == device_type::input ? "input" : "output";
-    std::wcout << "> Please specify from the list below your chosen " << deviceTypeStr << " device. "
-        "Enter the number preceding it to choose it." << std::endl;
-
-    list_devices_of_type(deviceType, dac);
-
-    const auto deviceId = get_valid_device_id_from_user(deviceType, dac);
-
-    std::wcout << std::endl << "Your chosen " << deviceTypeStr << " device is " 
-        << string_to_wstring(dac.getDeviceInfo(deviceId).name) << "." << std::endl << std::endl;
-
-    return deviceId;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool valid_loop_number(int loops)
-{
-    return loops > 0 && loops < MAX_NUMBER_OF_LOOPS;
-}
-
-//--------------------------------------------------------------------------------------------------
-int get_user_specified_number_of_loops()
-{
-    std::wcout << "> How many loops of audio do you want?" << std::endl;
-
-    auto userInput = std::string("");
-    std::cin >> userInput;
-
-    while (!valid_loop_number(std::stoi(userInput)))
-    {
-        std::wcout << "Invalid loop number. Please specify number of loops between 0 and " 
-            << MAX_NUMBER_OF_LOOPS << ". Try again." << std::endl;
-        std::cin >> userInput;
-    }
-
-    // clear cin
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-    std::wcout << std::endl;
-
-    return std::stoi(userInput);
-}
-
-//--------------------------------------------------------------------------------------------------
-void init_audio_buffer(audio_buffer<sample_type> &audioBuffer, decoder &decoder)
-{
-    decoder.readPcmFrames(decoder.getSampleCount(), (sample_type *)audioBuffer.data());
-
-    const auto writeTell    = decoder.getSampleCount() * decoder.getChannelCount() * sizeof(sample_type);
-    constexpr auto readTell = 0u;
-    audioBuffer.seek(writeTell, readTell);
-}
-
-//--------------------------------------------------------------------------------------------------
-void please_wait()
-{
-    std::wcout << "Please wait a few moments we'll be right with you...." << std::endl << std::endl;
-    std::wcout << give_art3() << std::endl << std::endl;
-    std::wcout << L"Veuillez patienter s'il vous pla\u00eet...." << std::endl << std::endl;
-    std::wcout << "Go get a coffee...." << std::endl << std::endl;
-}
-
-//--------------------------------------------------------------------------------------------------
-bool export_song(const char *outputFilename, decoder &decoder, audio_buffer<sample_type> &audioBuffer, uint16_t loopNumber)
-{
-    auto upEncoder = std::make_unique<encoder>(outputFilename, decoder.getChannelCount(),
+    auto upEncoder = std::make_unique<encoder>(outputFilepath.string().c_str(), decoder.getChannelCount(),
         decoder.getSampleFrequency(), WAV_FORMAT, static_cast<uint32_t>(sizeof(sample_type)));
 
     return upEncoder->isValid() && 
@@ -325,35 +342,24 @@ int wmain(int argc, wchar_t *argv[])
 
     init_audio_buffer(audioBuffer, *upDecoder);
 
-    please_wait();
-
     if (!try_begin_playing_and_recording_audio(dac, *upDecoder, audioBuffer, chosenInputDeviceId, chosenOutputDeviceId))
     {
         std::wcout << "Error: Failed to play audio." << std::endl;
         return EXIT_FAILURE;
     }
 
-    // Wait until play_and_record ends.
-    std::unique_lock lk(m);
-    cv.wait(lk, [] { return ready; });
+    please_wait();
 
-    std::wcout << "Finished playing. Exporting your song..." << std::endl;
+    wait_for_play_and_record_to_end();
+    
+    std::wcout << std::endl << "Finished playing. Exporting your song..." << std::endl;
 
     // Export song.
-    const auto outputFilepath 
-        = std::filesystem::path(options.outputFolder) / 
+    const auto outputFilepath
+        = std::filesystem::path(options.outputFolder) /
         (std::filesystem::path(options.inputFile).stem().string() + ".wav");
-
-    if (std::filesystem::exists(outputFilepath))
-    {
-        std::filesystem::remove(outputFilepath);
-    }
-    else
-    {
-        std::filesystem::create_directory(outputFilepath.parent_path());
-    }
     
-    if (!export_song(outputFilepath.string().c_str(), *upDecoder, audioBuffer, loopNumber))
+    if (!export_song(outputFilepath, *upDecoder, audioBuffer, loopNumber))
     {
         std::wcout << "Error : failed to write out all the audio samples into the exported "
             "wav file." << std::endl;
