@@ -7,6 +7,9 @@
     <Filter Include="_rtaudio">
       <UniqueIdentifier>{0f574bb3-f91e-4ee1-a391-23e38871cae8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="_include">
+      <UniqueIdentifier>{e1680494-c39f-4392-bb30-035dbf2ec15f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\main.cpp">
@@ -17,23 +20,23 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\src\mp3_decoder.hpp">
-      <Filter>src</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\audio_buffer.hpp">
-      <Filter>src</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\wav_encoder.hpp">
-      <Filter>src</Filter>
+      <Filter>_include</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\giver_of_art.hpp">
-      <Filter>src</Filter>
+      <Filter>_include</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\string_utils.hpp">
-      <Filter>src</Filter>
+    <ClInclude Include="..\..\src\mp3_decoder.hpp">
+      <Filter>_include</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\program_options.hpp">
-      <Filter>src</Filter>
+      <Filter>_include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\string_utils.hpp">
+      <Filter>_include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\wav_encoder.hpp">
+      <Filter>_include</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
