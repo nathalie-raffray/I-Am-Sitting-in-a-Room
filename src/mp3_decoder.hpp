@@ -53,6 +53,12 @@ public:
         drmp3_read_pcm_frames_f32(&decoder_, framesToRead, pBufferOut);
     }
 
+    //------------------------------------------------------------------------------------------
+    void readPcmFrames(uint64_t framesToRead, short *pBufferOut)
+    {
+        drmp3_read_pcm_frames_s16(&decoder_, framesToRead, pBufferOut);
+    }
+
 private:
     //------------------------------------------------------------------------------------------
     drmp3       decoder_;
