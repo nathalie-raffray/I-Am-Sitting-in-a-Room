@@ -308,8 +308,10 @@ int wmain(int argc, wchar_t *argv[])
         std::wcout << "Error: No audio devices found!" << std::endl;
         return -1;
     }
-
-    std::wcout << L"ヽ༼ຈل͜ຈ༽ﾉ Welcome to \"I Am Sitting in a Room\" ヽ༼ຈل͜ຈ༽ﾉ" << std::endl;
+    
+    const auto donger = L"\u30fd\u0f3c\u0e88\u0644\u035c\u0e88\u0f3d\uff89";
+    std::wcout << std::endl << "-------------------------------------------------------" << std::endl;
+    std::wcout << donger << L" Welcome to \"I Am Sitting in a Room\" " << donger << std::endl;
     std::wcout << "-------------------------------------------------------" << std::endl << std::endl;
 
     const auto chosenInputDeviceId  = get_user_specified_device_id(dac, device_type::input);
