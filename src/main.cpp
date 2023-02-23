@@ -281,34 +281,34 @@ int wmain(int argc, wchar_t *argv[])
     if (!options.areValid)
     {
         program_options::print_usage();
-        return -1;
+        return EXIT_FAILURE;
     }
 
     if (!std::filesystem::exists(options.inputFile))
     {
         std::wcout << "Error: The file path provided (" << options.inputFile << ") doesn't exist." << std::endl;
-        return -1;
+        return EXIT_FAILURE;
     }
 
     auto mp3Bytes = read_file(options.inputFile);
     if (mp3Bytes.empty())
     {
         std::wcout << "Error: Failed to read the contents of file at " << options.inputFile << "." << std::endl;
-        return -1;
+        return EXIT_FAILURE;
     }
 
     auto upDecoder = std::make_unique<decoder>(mp3Bytes.data(), mp3Bytes.size());
     if (!upDecoder || !upDecoder->isValid())
     {
         std::wcout << "Error: Failed to decode mp3 file " << options.inputFile << "." << std::endl;
-        return -1;
+        return EXIT_FAILURE;
     }
 
     RtAudio dac;
     if (dac.getDeviceCount() < 1) 
     {
         std::wcout << "Error: No audio devices found!" << std::endl;
-        return -1;
+        return EXIT_FAILURE;
     }
     
     const auto donger = L"\u30fd\u0f3c\u0e88\u0644\u035c\u0e88\u0f3d\uff89";
@@ -330,7 +330,7 @@ int wmain(int argc, wchar_t *argv[])
     if (!try_begin_playing_and_recording_audio(dac, *upDecoder, audioBuffer, chosenInputDeviceId, chosenOutputDeviceId))
     {
         std::wcout << "Error: Failed to play audio." << std::endl;
-        return -1;
+        return EXIT_FAILURE;
     }
 
     // Wait until play_and_record ends.
@@ -357,8 +357,8 @@ int wmain(int argc, wchar_t *argv[])
     {
         std::wcout << "Error : failed to write out all the audio samples into the exported "
             "wav file." << std::endl;
-        return -1;
+        return EXIT_FAILURE;
     }
     
-    return 0;
+    return EXIT_SUCCESS;
 }
