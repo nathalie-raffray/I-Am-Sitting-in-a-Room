@@ -7,7 +7,7 @@ struct program_options
     //------------------------------------------------------------------------------------------
     static void print_usage()
     {
-        std::cout <<
+        std::wcout <<
             "Invalid usage.\n"
             "I am sitting in a room different from the one you are in now.\n"
             "\n"
@@ -21,15 +21,15 @@ struct program_options
     }
 
     //------------------------------------------------------------------------------------------
-    program_options(int argc, char *argv[])
+    program_options(int argc, wchar_t *argv[])
     {
         for (auto i = 0; i < argc; ++i)
         {
-            if (argv[i] == std::string("--input") || argv[i] == std::string("-i"))
+            if (argv[i] == std::wstring(L"--input") || argv[i] == std::wstring(L"-i"))
             {
                 inputFile = argv[++i];
             }
-            else if (argv[i] == std::string("--output") || argv[i] == std::string("-o"))
+            else if (argv[i] == std::wstring(L"--output") || argv[i] == std::wstring(L"-o"))
             {
                 outputFolder = argv[++i];
             }
@@ -39,8 +39,8 @@ struct program_options
     }
 
     //------------------------------------------------------------------------------------------
-    bool        areValid = false;
+    bool            areValid = false;
     //------------------------------------------------------------------------------------------
-    std::string inputFile;
-    std::string outputFolder;
+    std::wstring    inputFile;
+    std::wstring    outputFolder;
 };

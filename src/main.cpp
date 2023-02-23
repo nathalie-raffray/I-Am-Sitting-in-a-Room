@@ -2,12 +2,18 @@
 #include <filesystem>
 #include <mutex>
 
+#include <io.h>
+#include <fcntl.h>
+
 #include "rtaudio/RtAudio.h"
 
 #include "program_options.hpp"
 #include "audio_buffer.hpp"
 #include "mp3_decoder.hpp"
 #include "wav_encoder.hpp"
+#include "giver_of_art.hpp"
+#include "string_utils.hpp"
+
 
 // Decide sample type.
 #define WAV_FORMAT DR_WAVE_FORMAT_PCM   // DR_WAVE_FORMAT_IEEE_FLOAT
@@ -16,8 +22,8 @@ using sample_type = int16_t;            // float
 
 #define MAX_NUMBER_OF_LOOPS 50
 
-using decoder       = mp3_decoder;
-using encoder       = wav_encoder;
+using decoder = mp3_decoder;
+using encoder = wav_encoder;
 
 std::mutex m;
 std::condition_variable cv;
@@ -32,7 +38,7 @@ enum class device_type
 };
 
 //--------------------------------------------------------------------------------------------------
-std::vector<char> read_file(const std::string &filePath)
+std::vector<char> read_file(const std::wstring &filePath)
 {
     std::ifstream file(filePath, std::ios::binary | std::ios::ate);
     std::streamsize size = file.tellg();
@@ -55,17 +61,15 @@ int play_and_record(void *pOutputBuffer, void *pInputBuffer, unsigned int nBuffe
     {
         if (status == RTAUDIO_INPUT_OVERFLOW)
         {
-            std::cout << "Stream underflow detected: Input data was discarded because of an overflow "
+            std::wcout << "Stream underflow detected: Input data was discarded because of an overflow "
                 "condition at the driver." << std::endl;
         }
         if (status == RTAUDIO_OUTPUT_UNDERFLOW)
         {
-            std::cout << "Stream underflow detected: The output buffer ran low, likely causing a gap  "
+            std::wcout << "Stream underflow detected: The output buffer ran low, likely causing a gap  "
                 "in the output sound." << std::endl;
         }
     }
-
-    std::cout << "number buffer frames: " << nBufferFrames << std::endl;
 
     auto pAudioBuffer = reinterpret_cast<audio_buffer<sample_type> *>(pUserData);
     if (pAudioBuffer->reachedEndOfBuffer())
@@ -91,6 +95,9 @@ int play_and_record(void *pOutputBuffer, void *pInputBuffer, unsigned int nBuffe
     {
         // First time are in play_and_record() nothing has played yet, so we wait for
         // next iteration to record.
+        std::wcout << "Beginning shortly. Please take this nanosecond to silence your cellphone during the service."
+            << " Thank you." << std::endl << std::endl;
+
         firstIteration = false;
     }
     else
@@ -128,7 +135,7 @@ bool try_begin_playing_and_recording_audio(RtAudio &dac, decoder &decoder,
     try 
     {
         dac.openStream(&oParams, &iParams, SAMPLE_TYPE, sampleRate, &desiredBufferFrames, 
-            &play_and_record, (void *)&audioBuffer/*, &streamOptions */ );
+            &play_and_record, (void *)&audioBuffer/*, &streamOptions*/);
         dac.startStream();
     }
     catch (RtAudioError &e)
@@ -167,7 +174,7 @@ void list_devices_of_type(device_type deviceType, RtAudio &dac)
         info = dac.getDeviceInfo(i);
         if (info.probed == true && is_correct_device_type(info, deviceType))
         {
-            std::cout << i << ": " << info.name << std::endl;
+            std::wcout << "     " << i << ": " << string_to_wstring(info.name) << std::endl;
         }
     }
 }
@@ -180,7 +187,7 @@ int get_valid_device_id_from_user(device_type deviceType, RtAudio &dac)
 
     while (!is_valid_device_id(std::stoi(userInput), deviceType, dac))
     {
-        std::cout << "Invalid input. Try again." << std::endl;
+        std::wcout << "Invalid input. Try again." << std::endl;
         std::cin >> userInput;
     }
 
@@ -194,15 +201,15 @@ int get_valid_device_id_from_user(device_type deviceType, RtAudio &dac)
 int get_user_specified_device_id(RtAudio &dac, device_type deviceType)
 {
     const auto deviceTypeStr = deviceType == device_type::input ? "input" : "output";
-    std::cout << "Please specify from the list below your chosen " << deviceTypeStr << " device. "
+    std::wcout << "> Please specify from the list below your chosen " << deviceTypeStr << " device. "
         "Enter the number preceding it to choose it." << std::endl;
 
     list_devices_of_type(deviceType, dac);
 
     const auto deviceId = get_valid_device_id_from_user(deviceType, dac);
 
-    std::cout << "Your chosen " << deviceTypeStr << " device is " 
-        << dac.getDeviceInfo(deviceId).name << std::endl << std::endl;
+    std::wcout << std::endl << "Your chosen " << deviceTypeStr << " device is " 
+        << string_to_wstring(dac.getDeviceInfo(deviceId).name) << "." << std::endl << std::endl;
 
     return deviceId;
 }
@@ -216,14 +223,14 @@ bool valid_loop_number(int loops)
 //--------------------------------------------------------------------------------------------------
 int get_user_specified_number_of_loops()
 {
-    std::cout << "How many loops of audio do you want?" << std::endl;
+    std::wcout << "> How many loops of audio do you want?" << std::endl;
 
     auto userInput = std::string("");
     std::cin >> userInput;
 
     while (!valid_loop_number(std::stoi(userInput)))
     {
-        std::cout << "Invalid loop number. Please specify number of loops between 0 and " 
+        std::wcout << "Invalid loop number. Please specify number of loops between 0 and " 
             << MAX_NUMBER_OF_LOOPS << ". Try again." << std::endl;
         std::cin >> userInput;
     }
@@ -231,7 +238,7 @@ int get_user_specified_number_of_loops()
     // clear cin
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    std::cout << std::endl;
+    std::wcout << std::endl;
 
     return std::stoi(userInput);
 }
@@ -245,6 +252,15 @@ void init_audio_buffer(audio_buffer<sample_type> &audioBuffer, decoder &decoder)
 }
 
 //--------------------------------------------------------------------------------------------------
+void please_wait()
+{
+    std::wcout << "Please wait a few moments we'll be right with you...." << std::endl << std::endl;
+    std::wcout << give_art3() << std::endl << std::endl;
+    std::wcout << "Veuillez patienter s'il vous plaît...." << std::endl << std::endl;
+    std::wcout << "Go get a coffee...." << std::endl << std::endl;
+}
+
+//--------------------------------------------------------------------------------------------------
 bool export_song(const char *outputFilename, decoder &decoder, audio_buffer<sample_type> &audioBuffer, uint16_t loopNumber)
 {
     auto upEncoder = std::make_unique<encoder>(outputFilename, decoder.getChannelCount(),
@@ -255,8 +271,10 @@ bool export_song(const char *outputFilename, decoder &decoder, audio_buffer<samp
 }
 
 //--------------------------------------------------------------------------------------------------
-int main(int argc, char *argv[])
+int wmain(int argc, wchar_t *argv[])
 {
+    _setmode(_fileno(stdout), _O_U16TEXT);
+
     const auto &options = program_options(argc, argv);
     if (!options.areValid)
     {
@@ -266,30 +284,33 @@ int main(int argc, char *argv[])
 
     if (!std::filesystem::exists(options.inputFile))
     {
-        std::cout << "Error: The file path provided (" << options.inputFile << ") doesn't exist." << std::endl;
+        std::wcout << "Error: The file path provided (" << options.inputFile << ") doesn't exist." << std::endl;
         return -1;
     }
 
     auto mp3Bytes = read_file(options.inputFile);
     if (mp3Bytes.empty())
     {
-        std::cout << "Error: Failed to read the contents of file at " << options.inputFile << "." << std::endl;
+        std::wcout << "Error: Failed to read the contents of file at " << options.inputFile << "." << std::endl;
         return -1;
     }
 
     auto upDecoder = std::make_unique<decoder>(mp3Bytes.data(), mp3Bytes.size());
     if (!upDecoder || !upDecoder->isValid())
     {
-        std::cout << "Error: Failed to decode mp3 file " << options.inputFile << "." << std::endl;
+        std::wcout << "Error: Failed to decode mp3 file " << options.inputFile << "." << std::endl;
         return -1;
     }
 
     RtAudio dac;
     if (dac.getDeviceCount() < 1) 
     {
-        std::cout << "Error: No audio devices found!" << std::endl;
+        std::wcout << "Error: No audio devices found!" << std::endl;
         return -1;
     }
+
+    std::wcout << L"ヽ༼ຈل͜ຈ༽ﾉ Welcome to \"I Am Sitting in a Room\" ヽ༼ຈل͜ຈ༽ﾉ" << std::endl;
+    std::wcout << "-------------------------------------------------------" << std::endl << std::endl;
 
     const auto chosenInputDeviceId  = get_user_specified_device_id(dac, device_type::input);
     const auto chosenOutputDeviceId = get_user_specified_device_id(dac, device_type::output);
@@ -300,9 +321,11 @@ int main(int argc, char *argv[])
 
     init_audio_buffer(audioBuffer, *upDecoder);
 
+    please_wait();
+
     if (!try_begin_playing_and_recording_audio(dac, *upDecoder, audioBuffer, chosenInputDeviceId, chosenOutputDeviceId))
     {
-        std::cout << "Error: Failed to play audio." << std::endl;
+        std::wcout << "Error: Failed to play audio." << std::endl;
         return -1;
     }
 
@@ -310,7 +333,7 @@ int main(int argc, char *argv[])
     std::unique_lock lk(m);
     cv.wait(lk, [] { return ready; });
 
-    std::cout << "Stream ended..." << std::endl;
+    std::wcout << "Finished playing. Exporting your song..." << std::endl;
 
     // Export song.
     const auto outputFilepath 
@@ -328,7 +351,7 @@ int main(int argc, char *argv[])
     
     if (!export_song(outputFilepath.string().c_str(), *upDecoder, audioBuffer, loopNumber))
     {
-        std::cout << "Error : failed to write out all the audio samples into the exported "
+        std::wcout << "Error : failed to write out all the audio samples into the exported "
             "wav file." << std::endl;
         return -1;
     }
